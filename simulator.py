@@ -14,7 +14,7 @@ Banner = r"""
 """
 print(Banner)
 import random
-random.seed(42)
+random.seed(42)     # allow for a stream of pseudo-random numbers for debugging purposes across team members
 import pandas as pd
 import scipy.stats as stats
 import matplotlib.pyplot as plt
