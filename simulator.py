@@ -14,6 +14,7 @@ Banner = r"""
 """
 print(Banner)
 import random
+random.seed(42)
 import pandas as pd
 import scipy.stats as stats
 import matplotlib.pyplot as plt
@@ -126,7 +127,11 @@ def run_simulation(timer, attack_type=ATTACK_TYPES[0], attack_start=0, attack_en
     pump_status = []
     valve_status = []
     sensor_water_level = water_level
+    # setting the label for attack; 0 for no attack, 1 for attack
+    attack_labels = []
     for counter in range(timer):
+        # attack: boolean value that denotes whether an attack had occured, initialized to be False each iteration
+        attack = False
         # Check water_level and control pump and valve accordingly
         pump, valve = get_p_and_v(sensor_water_level)
         if attack_p_and_v and counter in range(attack_start, attack_end):
@@ -141,18 +146,26 @@ def run_simulation(timer, attack_type=ATTACK_TYPES[0], attack_start=0, attack_en
         if attack_type == "BIAS":
             if counter in range(attack_start, attack_end):
                 sensor_water_level += attack_param
+                attack = True
         elif attack_type == "SURGE":
             if counter in range(attack_start, attack_end):
                 sensor_water_level = attack_param
+                attack = True
         elif attack_type == "RANDOM":
             if counter in range(attack_start, attack_end):
                 sensor_water_level += random.randrange(attack_param[0], attack_param[1])
+                attack = True
         # Save measurements into lists
         estimated_measurements.append(water_level)
         sensor_measurements.append(round(sensor_water_level, 2))
         pump_status.append(int(pump))
         valve_status.append(int(valve))
-    return attack_type, attack_p_and_v, estimated_measurements, sensor_measurements, pump_status, valve_status
+        # Appending the label according to whether attack is set to True or False
+        if attack:
+            attack_labels.append(1)
+        else:
+            attack_labels.append(0)
+    return attack_type, attack_p_and_v, estimated_measurements, sensor_measurements, pump_status, valve_status, attack_labels
 
 #Start simulation with attack
 def run_simulations_with_attacks():
@@ -196,14 +209,14 @@ def run_simulations_with_attacks():
     else:
         if DEBUG:
             print("Normal operation. No attack simulated.")
-    attack_type,attack_p_and_v,estimated_measurements,sensor_measurements, pump_status, valve_status = run_simulation(SIMULATION_TIME, attack_type, attack_start,attack_end, attack_param, attack_p_and_v)
+    attack_type,attack_p_and_v,estimated_measurements,sensor_measurements, pump_status, valve_status, attack_labels = run_simulation(SIMULATION_TIME, attack_type, attack_start,attack_end, attack_param, attack_p_and_v)
     generate_plot(estimated_measurements, sensor_measurements, pump_status, valve_status, title=(attack_type, attack_p_and_v))
     if SHOW_PLOTS:
         if RUNS > 10:
             print("Can only show plots for at most 10 runs.")
         else:
             plt.show()
-    return sensor_measurements,pump_status,valve_status,attacks
+    return sensor_measurements,pump_status,valve_status,attacks, attack_labels
 
 if __name__ == "__main__":
     if DEBUG:
@@ -211,8 +224,8 @@ if __name__ == "__main__":
         for i in range(RUNS):
             #Print progress of each simulation
             print("\n******  Simulation Run #%s done******" % (i + 1))
-            sensor_measurements, pump_status, valve_status,attacks = run_simulations_with_attacks()
-            df = pd.DataFrame({"pump": pump_status, "valve": valve_status, "sensor": sensor_measurements})
+            sensor_measurements, pump_status, valve_status,attacks, attack_labels = run_simulations_with_attacks()
+            df = pd.DataFrame({"pump": pump_status, "valve": valve_status, "sensor": sensor_measurements, "attack": attack_labels})
             if i>0 or os.path.isfile("output/results.csv") and os.stat("output/results.csv").st_size != 0:
                 df.to_csv("output/results.csv", mode='a', index=False,header=False)
             else:
@@ -221,7 +234,7 @@ if __name__ == "__main__":
         init_folders()
         start = timer()
         for i in range(RUNS):
-            sensor_measurements, pump_status, valve_status,attacks = run_simulations_with_attacks()
+            sensor_measurements, pump_status, valve_status,attacks, attack_labels = run_simulations_with_attacks()
             count_danger_tank = count_danger_pump = 0
             for j in range(len(sensor_measurements)):
                 if(sensor_measurements[j] > 810):
@@ -232,7 +245,7 @@ if __name__ == "__main__":
                 print('*** Tank have overflowed for %s simulation steps***'%(count_danger_tank))
             if count_danger_pump > 1:
                 print('*** Pump have dry ran for %s simulation steps***'%(count_danger_pump))
-            df = pd.DataFrame({"pump": pump_status, "valve": valve_status, "sensor": sensor_measurements})
+            df = pd.DataFrame({"pump": pump_status, "valve": valve_status, "sensor": sensor_measurements, "attack": attack_labels})
             if i>0 or os.path.isfile("output/results.csv") and os.stat("output/results.csv").st_size != 0:
                 df.to_csv("output/results.csv", mode='a', index=False,header=False)
             else:
